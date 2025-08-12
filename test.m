@@ -3,11 +3,11 @@ clear all;
 close all;
 warning off;
 T = 16; % transmit antenas
-R = 16; % receive antenas
+R = 8; % receive antenas
 M = 4; % users
 %K = 3;  % interference sources
 N = 20; % number of symbols
-P_max = 20; %power Watt
+P_max = 1; %power Watt
 N_montecarlo = 1;
 SNRdB = -2:2:12;
 rho = 0.1;
@@ -16,54 +16,20 @@ alpha = 0.05; % Descent rate
 amp = sqrt(P_max);
 delta=pi/180;   % Space between elements of antena 
 theta=-pi/2:delta:pi/2;
-target_DoA=[-20*pi/180];
+target_DoA=[-20*pi/180, 20*pi/180];
 interference_DoA = [-60*pi/180, 40*pi/180];
-sigma_t = [0.25]; %W
-sigma_k = [0.09,0.25]; %W
-sigma_n = 0.01; %W
+sigma_t = [0.25, 0.25]; %W
+sigma_k = [0.3,0.3]; %W
+sigma_n = 0; %W
 
+% Tính đến bài toán QoS
 % -- Design desired beam pattern -- %
 %%-------------Radar Parameters-------------------
 
-%Chuyển giá trị DoA và interference source sang độ
-theta_degrees = theta * 180 / pi;  % Chuyển theta sang độ
-target_DoA_degrees = target_DoA * 180 / pi;  % Chuyển target_DoA sang độ
-interference_DoA_degrees = interference_DoA * 180 / pi;  % Chuyển interference_DoA sang độ
-
-% Tìm index gần nhất trong mảng theta_degrees với target_DoA_degrees
-target_indexes = zeros(size(target_DoA_degrees));  % Khởi tạo mảng chứa các index
-for i = 1:length(target_DoA_degrees)
-    [~, target_indexes(i)] = min(abs(theta_degrees - target_DoA_degrees(i)));  % Tìm index gần nhất với target_DoA
-end
-
-
-% Tìm index gần nhất cho từng interference source
-interference_indexes = zeros(size(interference_DoA_degrees));  % Khởi tạo mảng chứa các index
-for i = 1:length(interference_DoA_degrees)
-    [~, interference_indexes(i)] = min(abs(theta_degrees - interference_DoA_degrees(i)));  % Tìm index gần nhất cho mỗi interference source
-end
-
-
 for tt=1:T
     for jj=1:length(theta)
-        a_t(tt,jj)=exp(-1j*pi*(tt)*sin(theta(jj))); % Steering vector a at transmiter for each theta angle
+        a(tt,jj)=exp(1j*pi*(tt-T/2)*sin(theta(jj)));
     end
-end
-
-for rr=1:R
-    for jj=1:length(theta)
-        a_r(rr,jj)=exp(-1j*pi*(rr)*sin(theta(jj))); % Steering vector a at receiver for each theta angle
-    end
-end
-
-
-for tt=1:length(target_DoA)
-    A_tt(:,tt) = a_t(:,target_indexes(tt)); % Steering matrix for each target
-
-end
-
-for kk=1:length(interference_DoA)
-    A_kk(:,kk) = a_t(:,interference_indexes(kk)); % Steering vector for each interference
 end
 
 
@@ -81,18 +47,46 @@ for ii=1:length(interference_DoA)
 end
 
 
-for tt=1:length(target_DoA)
-    A_theta_t(:,:,tt) = kron(eye(N),a_r(:,target_indexes(tt))*a_t(:,target_indexes(tt))');
+%R_d = my_waveform_design(T,A_tt,A_kk,P_max);
+R_d = waveform_design_multibm_covmat_new( Pd_theta,T,a,theta,P_max); % Desired Hermitian positive semidefinite covariance matrix
+F = chol(R_d)'; % Cholesky decomposition
 
+%Steering vectors of targets
+for tt=1:T
+    for jj=1:length(target_DoA)
+        A_tt(tt,jj)=exp(1j*pi*(tt-T/2))*sin(target_DoA(jj));
+    end
+end
+
+for rr=1:R
+    for jj=1:length(target_DoA)
+        A_rt(rr,jj)=exp(1j*pi*(rr-R/2))*sin(target_DoA(jj));
+    end
+end
+
+for tt=1:length(target_DoA)
+    A_theta_t(:,:,tt) = kron(eye(N),A_rt(:,tt)*A_tt(:,tt)');
+end
+
+
+%Steering vectors of interferences
+for tt=1:T
+    for jj=1:length(interference_DoA)
+        A_tk(tt,jj)=exp(1j*pi*(tt-T/2))*sin(interference_DoA(jj));
+    end
+end
+
+for rr=1:R
+    for jj=1:length(interference_DoA)
+        A_rk(rr,jj)=exp(1j*pi*(rr-R/2))*sin(interference_DoA(jj));
+    end
 end
 
 for kk=1:length(interference_DoA)
-    A_theta_k(:,:,kk) = kron(eye(N),a_r(:,interference_indexes(kk))*a_t(:,interference_indexes(kk))');
+    A_theta_k(:,:,kk) = kron(eye(N),A_rk(:,kk)*A_tk(:,kk)');
 end
 
-%R_d = my_waveform_design(T,A_tt,A_kk,P_max);
-R_d = waveform_design_multibm_covmat_new( Pd_theta,T,a_t,theta,P_max); % Desired Hermitian positive semidefinite covariance matrix
-F = chol(R_d)'; % Cholesky decomposition
+
 
 for nn = 1:N_montecarlo
     H = (randn(M,T)+1j*randn(M,T))/sqrt(2); % Channel
@@ -150,16 +144,16 @@ for nn = 1:N_montecarlo
         daoham_x = 2*rho*H_tilde'*(H_tilde*x - s) + (1-rho)*daoham_sinr +  2*(1-rho)*lambda*(x-x_0);
         
         % Project Gradient Descent method
-        d = x - alpha*daoham_x;
+        x = x - alpha*daoham_x;
         
-        for ii=1:length(d)
-            % x(ii) = sqrt(P_max/(N*T))*d(ii)/abs(d(ii)); % Total energy constraint
+        for ii=1:length(x)
+            %x(ii) = sqrt(P_max/(N*T))*x(ii)/abs(x(ii)); % Total energy constraint
 
             % Constant modulus constraint
-            if abs(d(ii)) == 0
+            if abs(x(ii)) == 0
                 x(ii) = sqrt(P_max/(N*T));
             else
-                x(ii) = sqrt(P_max/(N*T))*d(ii)/abs(d(ii));
+                x(ii) = sqrt(P_max/(N*T))*x(ii)/abs(x(ii));
             end
         end
 
@@ -181,7 +175,7 @@ for nn = 1:N_montecarlo
     X_opt = reshape(x,[T N]);
 
     for ii = 1:length(SNRdB)
-        N0 = P_max/(10^(SNRdB(ii)/10));
+        N0 = P_max/(10^(SNRdB(ii)/10)); % Chưa xét đến công suất thu theo pass loss
         X_ZF = ff*H_pinv*Y;
         for mm = 1:N
             MUI_orth(:,mm) = abs(H*X_omni(:,mm)-amp*Y(:,mm)).^2;
@@ -210,8 +204,8 @@ for nn = 1:N_montecarlo
         sumrate_lim(ii,nn) = sum(log2(1+P_max./(N0*ones(M,1))));
         sumrate_our(ii,nn) = sum(log2(1+P_max./(EMUI_our+N0*ones(M,1))));
     end
-    % clc
-    % disp(['Progress - ',num2str((nn-1)*length(SNRdB)+ii),'/',num2str(length(SNRdB)*N_montecarlo)]);
+    clc
+    disp(['Progress - ',num2str((nn-1)*length(SNRdB)+ii),'/',num2str(length(SNRdB)*N_montecarlo)]);
 end
 %%
 figure(1);
@@ -220,14 +214,14 @@ figure(1);
 % plot(SNRdB,mean(sumrate_trdoff1,2),'^-','LineWidth',1.5,'MarkerSize',8);hold on;
 % plot(SNRdB,mean(sumrate_trdoff2,2),'*-','LineWidth',1.5,'MarkerSize',8);hold on;
 % plot(SNRdB,mean(sumrate_trdoff3,2),'d--','LineWidth',1.5,'MarkerSize',8);hold on;
-plot(SNRdB,mean(sumrate_trdoff4,2),'+--','LineWidth',1.5,'MarkerSize',8);hold on;
+% plot(SNRdB,mean(sumrate_trdoff4,2),'+--','LineWidth',1.5,'MarkerSize',8);hold on;
 plot(SNRdB,mean(sumrate_our,2),'^-','LineWidth',1.5,'MarkerSize',8); hold on;
 plot(SNRdB,mean(sumrate_lim,2),'v--','LineWidth',1.5,'MarkerSize',8); hold on;
 
 grid on;
 xlabel('Transmit SNR (dB)');
 ylabel('Average Achievable Sum Rate (bps/Hz)');
-legend('liu2018','paper','Zero MUI');
+legend('paper','Zero MUI');
 %legend('Omni-Strict','Directional-Strict','Omni-Tradeoff-Total,\rho = 0.2','Directional-Tradeoff-Total,\rho = 0.2','Omni-Tradeoff-perAnt,\rho = 0.2','Directional-Tradeoff-perAnt,\rho = 0.2','Zero MUI');
 
 figure(2);
@@ -242,15 +236,15 @@ figure(2);
 % xlabel('\theta(deg)');
 % ylabel('Beampattern');
 %legend('Omni-Strict','Directional-Strict','Omni-Tradeoff-Total,\rho = 0.2','Directional-Tradeoff-Total,\rho = 0.2','Omni-Tradeoff-perAnt,\rho = 0.2','Directional-Tradeoff-perAnt,\rho = 0.2');
-plot(theta*180/pi,10*log10(diag(a_t'*X_dir*X_dir'*a_t)/real(trace(X_dir*X_dir'))),'LineWidth',1.5);hold on;
-plot(theta*180/pi,10*log10(diag(a_t'*X_trdoff4*X_trdoff4'*a_t)/real(trace(X_trdoff4*X_trdoff4'))),'LineWidth',1.5);hold on;
-plot(theta*180/pi,10*log10(diag(a_t'*X_opt*X_opt'*a_t)/real(trace(X_opt*X_opt'))),'LineWidth',1.5);hold on;
+plot(theta*180/pi,10*log10(diag(a'*X_dir*X_dir'*a)/real(trace(X_dir*X_dir'))),'LineWidth',1.5);hold on;
+%plot(theta*180/pi,10*log10(diag(a'*X_trdoff4*X_trdoff4'*a)/real(trace(X_trdoff4*X_trdoff4'))),'LineWidth',1.5);hold on;
+plot(theta*180/pi,10*log10(diag(a'*X_opt*X_opt'*a)/real(trace(X_opt*X_opt'))),'LineWidth',1.5);hold on;
 xlim([-90,90]);
 xline(target_DoA*180/pi, 'b-.', 'Linewidth', 1);
 xline(interference_DoA*180/pi, 'k-.', 'Linewidth', 1);
 xlabel('\theta(deg)');
 ylabel('Beampattern');
-legend('reference waveform','liu2018','paper');
+legend('reference waveform','paper');
 
 
 figure(3);

@@ -11,7 +11,7 @@ theta=-pi/2:delta:pi/2;
 target_DoA=[-20*pi/180, 20*pi/180];
 interference_DoA = [-50*pi/180, -10*pi/180, 40*pi/180];
 sigma_k = [0.09, 0.25 0.15];
-sigma_u = 0.25;
+sigma_u = [0.25, 0.25];
 sigma_n = 0;
 
 
@@ -22,18 +22,40 @@ for tt=1:N
     end
 end
 
-steer = @(theta) exp(1j*pi*(0:N-1)'*sin(theta));
-theta_t = target_DoA;
-theta_i = interference_DoA;
-% Steering Vectors
-a_t = steer(theta_t);
-A_t = zeros(N, length(target_DoA));
-for t = 1:length(target_DoA)
-    A_t(:, t) = steer(theta_t(t));
+% steer = @(theta) exp(1j*pi*(0:N-1)'*sin(theta));
+% theta_t = target_DoA;
+% theta_i = interference_DoA;
+% % Steering Vectors
+% %a_t = steer(theta_t);
+% A_t = zeros(N, length(target_DoA));
+% for t = 1:length(target_DoA)
+%     A_t(:, t) = steer(theta_t(t));
+% end
+% A_i = zeros(N, length(interference_DoA));
+% for k = 1:length(interference_DoA)
+%     A_i(:, k) = steer(theta_i(k));
+% end
+
+
+% Steering vector for the target
+A0_tmp = zeros(N, length(target_DoA));
+for tt=1:N
+    for jj=1:length(target_DoA)
+        A0_tmp(tt,jj)=exp(1j*pi*(tt-N/2))*sin(target_DoA(jj));
+    end
 end
-A_i = zeros(N, length(interference_DoA));
-for k = 1:length(interference_DoA)
-    A_i(:, k) = steer(theta_i(k));
+for i = 1:length(target_DoA)
+    A0(:,:,i) = kron(eye(L), A0_tmp(:,i)*A0_tmp(:,i)');
+end
+% Steering vector for the interference sources
+Ak_tmp = zeros(N, length(interference_DoA));
+for tt=1:N
+    for jj=1:length(interference_DoA)
+        Ak_tmp(tt,jj)=exp(1j*pi*(tt-N/2))*sin(interference_DoA(jj));
+    end
+end
+for i = 1:length(interference_DoA)
+    Ak(:,:,i) = kron(eye(L), Ak_tmp(:,i)*Ak_tmp(:,i)');
 end
 
 beam_width=9;
@@ -69,27 +91,6 @@ amp = sqrt(power);
 
 
 
-% Steering vector for the target
-A0_tmp = zeros(N, length(target_DoA));
-for tt=1:N
-    for jj=1:length(target_DoA)
-        A0_tmp(tt,jj)=exp(1j*pi*(tt-N/2))*sin(target_DoA(jj));
-    end
-end
-for i = 1:length(target_DoA)
-    A0(:,:,i) = kron(eye(L), A0_tmp(:,i)*A0_tmp(:,i)');
-end
-% Steering vector for the interference sources
-Ak_tmp = zeros(N, length(interference_DoA));
-for tt=1:N
-    for jj=1:length(interference_DoA)
-        Ak_tmp(tt,jj)=exp(1j*pi*(tt-N/2))*sin(interference_DoA(jj));
-    end
-end
-for i = 1:length(interference_DoA)
-    Ak(:,:,i) = kron(eye(L), Ak_tmp(:,i)*Ak_tmp(:,i)');
-end
-
 for nn = 1:N_montecarlo
     H = (randn(K,N)+1j*randn(K,N))/sqrt(2);
     H_tilde = kron(eye(L), H);
@@ -113,7 +114,7 @@ for nn = 1:N_montecarlo
         A = 0;
         for i = 1:length(target_DoA)
             %A = A + sigma_t(i)*A_theta_t(:,:,i)'*x*x'*A_theta_t(:,:,i);
-            A = A + sigma_u.*A0(:,:,i);
+            A = A + sigma_u(i)*A0(:,:,i);
         end
         B = sigma_n.*eye(size(A,1));
 
@@ -151,7 +152,7 @@ for nn = 1:N_montecarlo
         end
 
         for tt=1:length(target_DoA)
-            P = P + sigma_u.*(A0(:,:,tt)'*w*w'*A0(:,:,tt));
+            P = P + sigma_u(tt)*(A0(:,:,tt)'*w*w'*A0(:,:,tt));
         end
 
         daoham_sinr = 2*(Q*x*(x'*P*x) - (x'*Q*x+sigma_n*w'*w)*(P*x))/((x'*P*x)^2);
@@ -169,7 +170,7 @@ for nn = 1:N_montecarlo
         %     % end
         % end
 
-        tu = sigma_u*abs(w'*A*x)^2;
+        tu = sigma_u(1)*abs(w'*A*x)^2;
         tmp = 0;
         for i = 1:length(interference_DoA)
             tmp = tmp + sigma_k(i)*Ak(:,:,i)'*x*x'*Ak(:,:,i);
