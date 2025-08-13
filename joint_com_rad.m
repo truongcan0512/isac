@@ -10,15 +10,15 @@ N = 20; % number of symbols
 P_max = 1; %power Watt
 N_montecarlo = 1;
 SNRdB = -2:2:12;
-rho = 0.1;
+rho = 0.2;
 lambda = 1; % penalty parameter (IMPORTANT in similarity constraint !!!)
 alpha = 0.05; % Descent rate
 amp = sqrt(P_max);
 delta=pi/180;   % Space between elements of antena 
 theta=-pi/2:delta:pi/2;
-target_DoA=[-20*pi/180, 20*pi/180];
+target_DoA=[-20*pi/180];
 interference_DoA = [-60*pi/180, 40*pi/180];
-sigma_t = [0.25, 0.25]; %W
+sigma_t = [0.25]; %W
 sigma_k = [0.3,0.3]; %W
 sigma_n = 0; %W
 
@@ -54,13 +54,13 @@ F = chol(R_d)'; % Cholesky decomposition
 %Steering vectors of targets
 for tt=1:T
     for jj=1:length(target_DoA)
-        A_tt(tt,jj)=exp(1j*pi*(tt-T/2))*sin(target_DoA(jj));
+        A_tt(tt,jj)=exp(1j*pi*(tt-1))*sin(target_DoA(jj));
     end
 end
 
 for rr=1:R
     for jj=1:length(target_DoA)
-        A_rt(rr,jj)=exp(1j*pi*(rr-R/2))*sin(target_DoA(jj));
+        A_rt(rr,jj)=exp(1j*pi*(rr-1))*sin(target_DoA(jj));
     end
 end
 
@@ -72,13 +72,13 @@ end
 %Steering vectors of interferences
 for tt=1:T
     for jj=1:length(interference_DoA)
-        A_tk(tt,jj)=exp(1j*pi*(tt-T/2))*sin(interference_DoA(jj));
+        A_tk(tt,jj)=exp(1j*pi*(tt-1))*sin(interference_DoA(jj));
     end
 end
 
 for rr=1:R
     for jj=1:length(interference_DoA)
-        A_rk(rr,jj)=exp(1j*pi*(rr-R/2))*sin(interference_DoA(jj));
+        A_rk(rr,jj)=exp(1j*pi*(rr-1))*sin(interference_DoA(jj));
     end
 end
 
@@ -87,6 +87,22 @@ for kk=1:length(interference_DoA)
 end
 
 
+% Steering for all theta range
+for tt=1:T
+    for jj=1:length(theta)
+        A_t(tt,jj)=exp(1j*pi*(tt-1))*sin(theta(jj));
+    end
+end
+
+for rr=1:R
+    for jj=1:length(theta)
+        A_r(rr,jj)=exp(1j*pi*(rr-1))*sin(theta(jj));
+    end
+end
+
+for ii=1:length(theta)
+    A_theta(:,:,ii) = kron(eye(N),A_r(:,ii)*A_t(:,ii)');
+end
 
 for nn = 1:N_montecarlo
     H = (randn(M,T)+1j*randn(M,T))/sqrt(2); % Channel
@@ -141,20 +157,22 @@ for nn = 1:N_montecarlo
 
         daoham_sinr = 2*(Q*x*(x'*P*x) - (x'*Q*x+sigma_n*w'*w)*(P*x))/((x'*P*x)^2);
     
-        daoham_x = 2*rho*H_tilde'*(H_tilde*x - s) + (1-rho)*daoham_sinr +  2*(1-rho)*lambda*(x-x_0);
+        daoham_x = 2*rho*H_tilde'*(H_tilde*x - s) + (1-rho)*daoham_sinr;% +  2*(1-rho)*lambda*(x-x_0);
         
         % Project Gradient Descent method
         x = x - alpha*daoham_x;
         
         for ii=1:length(x)
-            %x(ii) = sqrt(P_max/(N*T))*x(ii)/abs(x(ii)); % Total energy constraint
-
-            % Constant modulus constraint
-            if abs(x(ii)) == 0
-                x(ii) = sqrt(P_max/(N*T));
-            else
-                x(ii) = sqrt(P_max/(N*T))*x(ii)/abs(x(ii));
+            if abs(x(ii))^2 > P_max
+                x(ii) = sqrt(P_max)*x(ii)/abs(x(ii)); % Total energy constraint
             end
+            
+            % Constant modulus constraint
+            % if abs(x(ii)) == 0
+            %     x(ii) = sqrt(P_max/(N*T));
+            % else
+            %     x(ii) = sqrt(P_max/(N*T))*x(ii)/abs(x(ii));
+            % end
         end
 
         %% Tinh cost function
@@ -170,9 +188,10 @@ for nn = 1:N_montecarlo
         end
         tu = w'*tmp_tu*w + sigma_n*w'*w;
 
-        cost(iter) = rho*norm(H_tilde*x - s, 2)^2 + (1-rho)*tu/mau + (1-rho)*lambda*norm(x - x_0, 2)^2;
+        cost(iter) = rho*norm(H_tilde*x - s, 2)^2 + (1-rho)*tu/mau;% + (1-rho)*lambda*norm(x - x_0, 2)^2;
     end
     X_opt = reshape(x,[T N]);
+    W = reshape(w,[R N]);
 
     for ii = 1:length(SNRdB)
         N0 = P_max/(10^(SNRdB(ii)/10)); % Chưa xét đến công suất thu theo pass loss
@@ -207,6 +226,11 @@ for nn = 1:N_montecarlo
     clc
     disp(['Progress - ',num2str((nn-1)*length(SNRdB)+ii),'/',num2str(length(SNRdB)*N_montecarlo)]);
 end
+
+for i=1:length(theta)
+    P_d(i) = abs(w'*A_theta(:,:,i)*x)^2;
+end
+
 %%
 figure(1);
 % plot(SNRdB,mean(sumrate_orth,2),'x-','LineWidth',1.5,'MarkerSize',8);hold on;
@@ -239,6 +263,8 @@ figure(2);
 plot(theta*180/pi,10*log10(diag(a'*X_dir*X_dir'*a)/real(trace(X_dir*X_dir'))),'LineWidth',1.5);hold on;
 %plot(theta*180/pi,10*log10(diag(a'*X_trdoff4*X_trdoff4'*a)/real(trace(X_trdoff4*X_trdoff4'))),'LineWidth',1.5);hold on;
 plot(theta*180/pi,10*log10(diag(a'*X_opt*X_opt'*a)/real(trace(X_opt*X_opt'))),'LineWidth',1.5);hold on;
+
+%plot(theta*180/pi,P_d,'LineWidth',1.5);hold on;
 xlim([-90,90]);
 xline(target_DoA*180/pi, 'b-.', 'Linewidth', 1);
 xline(interference_DoA*180/pi, 'k-.', 'Linewidth', 1);

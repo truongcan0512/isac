@@ -22,6 +22,7 @@ sigma_t = [0.25, 0.25]; %W
 sigma_k = [0.3,0.3]; %W
 sigma_n = 0; %W
 
+% Tính đến bài toán QoS
 % -- Design desired beam pattern -- %
 %%-------------Radar Parameters-------------------
 
@@ -42,7 +43,7 @@ end
 
 l=ceil((interference_DoA+pi/2*ones(1,length(interference_DoA)))/(delta)+ones(1,length(interference_DoA)));
 for ii=1:length(interference_DoA)
-    Pd_theta(l(ii)-(beam_width-1)/2:l(ii)+(beam_width-1)/2,1)=-1*ones(beam_width,1);
+    Pd_theta(l(ii)-(beam_width-1)/2:l(ii)+(beam_width-1)/2,1)=-0.1*ones(beam_width,1);
 end
 
 
@@ -109,7 +110,7 @@ for nn = 1:N_montecarlo
     x_0 = X_dir(:);
     %X_0 = reshape(x_0,T,N);
     x = x_0 - 100;
-    max_iter = 100;
+    max_iter = 500;
     cost = zeros(1, max_iter);
     for iter=1:max_iter
         %% Update w
@@ -146,14 +147,16 @@ for nn = 1:N_montecarlo
         x = x - alpha*daoham_x;
         
         for ii=1:length(x)
-            %x(ii) = sqrt(P_max/(N*T))*x(ii)/abs(x(ii)); % Total energy constraint
-
-            % Constant modulus constraint
-            if abs(x(ii)) == 0
-                x(ii) = sqrt(P_max/(N*T));
-            else
-                x(ii) = sqrt(P_max/(N*T))*x(ii)/abs(x(ii));
+            if abs(x(ii))^2 > P_max
+                x(ii) = sqrt(P_max)*x(ii)/abs(x(ii)); % Total energy constraint
             end
+            
+            % Constant modulus constraint
+            % if abs(x(ii)) == 0
+            %     x(ii) = sqrt(P_max/(N*T));
+            % else
+            %     x(ii) = sqrt(P_max/(N*T))*x(ii)/abs(x(ii));
+            % end
         end
 
         %% Tinh cost function
@@ -168,8 +171,8 @@ for nn = 1:N_montecarlo
             tmp_tu = tmp_tu + sigma_k(i)*A_theta_k(:,:,i)*x*x'*A_theta_k(:,:,i)';
         end
         tu = w'*tmp_tu*w + sigma_n*w'*w;
-% + (1-rho)*lambda*norm(x - x_0, 2)^2
-        cost(iter) = rho*norm(H_tilde*x - s, 2)^2 + (1-rho)*tu/mau ;
+
+        cost(iter) = rho*norm(H_tilde*x - s, 2)^2 + (1-rho)*tu/mau + (1-rho)*lambda*norm(x - x_0, 2)^2;
     end
     X_opt = reshape(x,[T N]);
 
@@ -203,8 +206,8 @@ for nn = 1:N_montecarlo
         sumrate_lim(ii,nn) = sum(log2(1+P_max./(N0*ones(M,1))));
         sumrate_our(ii,nn) = sum(log2(1+P_max./(EMUI_our+N0*ones(M,1))));
     end
-    % clc
-    % disp(['Progress - ',num2str((nn-1)*length(SNRdB)+ii),'/',num2str(length(SNRdB)*N_montecarlo)]);
+    clc
+    disp(['Progress - ',num2str((nn-1)*length(SNRdB)+ii),'/',num2str(length(SNRdB)*N_montecarlo)]);
 end
 %%
 figure(1);
@@ -213,14 +216,14 @@ figure(1);
 % plot(SNRdB,mean(sumrate_trdoff1,2),'^-','LineWidth',1.5,'MarkerSize',8);hold on;
 % plot(SNRdB,mean(sumrate_trdoff2,2),'*-','LineWidth',1.5,'MarkerSize',8);hold on;
 % plot(SNRdB,mean(sumrate_trdoff3,2),'d--','LineWidth',1.5,'MarkerSize',8);hold on;
-plot(SNRdB,mean(sumrate_trdoff4,2),'+--','LineWidth',1.5,'MarkerSize',8);hold on;
+% plot(SNRdB,mean(sumrate_trdoff4,2),'+--','LineWidth',1.5,'MarkerSize',8);hold on;
 plot(SNRdB,mean(sumrate_our,2),'^-','LineWidth',1.5,'MarkerSize',8); hold on;
 plot(SNRdB,mean(sumrate_lim,2),'v--','LineWidth',1.5,'MarkerSize',8); hold on;
 
 grid on;
 xlabel('Transmit SNR (dB)');
 ylabel('Average Achievable Sum Rate (bps/Hz)');
-legend('liu2018','paper','Zero MUI');
+legend('paper','Zero MUI');
 %legend('Omni-Strict','Directional-Strict','Omni-Tradeoff-Total,\rho = 0.2','Directional-Tradeoff-Total,\rho = 0.2','Omni-Tradeoff-perAnt,\rho = 0.2','Directional-Tradeoff-perAnt,\rho = 0.2','Zero MUI');
 
 figure(2);
@@ -236,14 +239,14 @@ figure(2);
 % ylabel('Beampattern');
 %legend('Omni-Strict','Directional-Strict','Omni-Tradeoff-Total,\rho = 0.2','Directional-Tradeoff-Total,\rho = 0.2','Omni-Tradeoff-perAnt,\rho = 0.2','Directional-Tradeoff-perAnt,\rho = 0.2');
 plot(theta*180/pi,10*log10(diag(a'*X_dir*X_dir'*a)/real(trace(X_dir*X_dir'))),'LineWidth',1.5);hold on;
-plot(theta*180/pi,10*log10(diag(a'*X_trdoff4*X_trdoff4'*a)/real(trace(X_trdoff4*X_trdoff4'))),'LineWidth',1.5);hold on;
+%plot(theta*180/pi,10*log10(diag(a'*X_trdoff4*X_trdoff4'*a)/real(trace(X_trdoff4*X_trdoff4'))),'LineWidth',1.5);hold on;
 plot(theta*180/pi,10*log10(diag(a'*X_opt*X_opt'*a)/real(trace(X_opt*X_opt'))),'LineWidth',1.5);hold on;
 xlim([-90,90]);
 xline(target_DoA*180/pi, 'b-.', 'Linewidth', 1);
 xline(interference_DoA*180/pi, 'k-.', 'Linewidth', 1);
 xlabel('\theta(deg)');
 ylabel('Beampattern');
-legend('reference waveform','liu2018','paper');
+legend('reference waveform','paper');
 
 
 figure(3);

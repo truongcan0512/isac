@@ -111,53 +111,53 @@ for nn = 1:N_montecarlo
     lambda = 1;
     for it = 1:iter
         %% Update w
-        A = 0;
-        for i = 1:length(target_DoA)
-            %A = A + sigma_t(i)*A_theta_t(:,:,i)'*x*x'*A_theta_t(:,:,i);
-            A = A + sigma_u(i)*A0(:,:,i);
-        end
-        B = sigma_n.*eye(size(A,1));
-
-        for i = 1:length(interference_DoA)
-            %B = B + sigma_k(i)*A_theta_k(:,:,i)'*x*x'*A_theta_k(:,:,i);
-            B = B + sigma_k(i)*Ak(:,:,i)*x*x'*Ak(:,:,i)';
-        end
-
-        w = (pinv(B)*A*x)/(x'*A'*pinv(B)*A*x);
-        % %% Update w
         % A = 0;
         % for i = 1:length(target_DoA)
-        %     A = A + sigma_u.*A0(:,:,i)'*x*x'*A0(:,:,i);
+        %     %A = A + sigma_t(i)*A_theta_t(:,:,i)'*x*x'*A_theta_t(:,:,i);
+        %     A = A + sigma_u(i)*A0(:,:,i);
         % end
         % B = sigma_n.*eye(size(A,1));
+        % 
         % for i = 1:length(interference_DoA)
-        %     B = B + sigma_k(i)*Ak(:,:,i)'*x*x'*Ak(:,:,i);
+        %     %B = B + sigma_k(i)*A_theta_k(:,:,i)'*x*x'*A_theta_k(:,:,i);
+        %     B = B + sigma_k(i)*Ak(:,:,i)*x*x'*Ak(:,:,i)';
         % end
+        % 
         % w = (pinv(B)*A*x)/(x'*A'*pinv(B)*A*x);
-        %% Update x
-        % U = 0; V = 0;
-        % for i = 1:length(target_DoA)
-        %     U = U + sigma_u*A0(:,:,i);
-        % end
-        % for i = 1:length(interference_DoA)
-        %     V = V + sigma_k(i)*Ak(:,:,i);
-        % end
-        % term = 1/(w'*U*x*x'*U'*w)^2*(w'*U*x*x'*U'*w*V'*w*w'*x - (w'*V*x*x'*V'*w + sigma_n*w'*w)*U'*w*w'*U*x);
-        % daoham = 2*(1-rho)*term + 2*rho*H_tilde'*(H_tilde*x - y) + 2*(1-rho)*lambda*(x - x_init);
-        %% Update x
-        Q = 0;
-        P = 0;
-        for kk=1:length(interference_DoA)
-            Q = Q + sigma_k(kk)*(Ak(:,:,kk)'*w*w'*Ak(:,:,kk));
+        % %% Update w
+        A = 0;
+        for i = 1:length(target_DoA)
+            A = A + sigma_u(i)*A0(:,:,i)'*x*x'*A0(:,:,i);
         end
-
-        for tt=1:length(target_DoA)
-            P = P + sigma_u(tt)*(A0(:,:,tt)'*w*w'*A0(:,:,tt));
+        B = sigma_n.*eye(size(A,1));
+        for i = 1:length(interference_DoA)
+            B = B + sigma_k(i)*Ak(:,:,i)'*x*x'*Ak(:,:,i);
         end
-
-        daoham_sinr = 2*(Q*x*(x'*P*x) - (x'*Q*x+sigma_n*w'*w)*(P*x))/((x'*P*x)^2);
-
-        daoham = (1-rho)*daoham_sinr + 2*rho*H_tilde'*(H_tilde*x - y) + 2*(1-rho)*lambda*(x-x_init);
+        w = (pinv(B)*A*x)/(x'*A'*pinv(B)*A*x);
+        %% Update x
+        U = 0; V = 0;
+        for i = 1:length(target_DoA)
+            U = U + sigma_u(i)*A0(:,:,i);
+        end
+        for i = 1:length(interference_DoA)
+            V = V + sigma_k(i)*Ak(:,:,i);
+        end
+        term = 1/(w'*U*x*x'*U'*w)^2*(w'*U*x*x'*U'*w*V'*w*w'*x - (w'*V*x*x'*V'*w + sigma_n*w'*w)*U'*w*w'*U*x);
+        daoham = 2*(1-rho)*term + 2*rho*H_tilde'*(H_tilde*x - y) ;%+ 2*(1-rho)*lambda*(x - x_init);
+        %% Update x
+        % Q = 0;
+        % P = 0;
+        % for kk=1:length(interference_DoA)
+        %     Q = Q + sigma_k(kk)*(Ak(:,:,kk)'*w*w'*Ak(:,:,kk));
+        % end
+        % 
+        % for tt=1:length(target_DoA)
+        %     P = P + sigma_u(tt)*(A0(:,:,tt)'*w*w'*A0(:,:,tt));
+        % end
+        % 
+        % daoham_sinr = 2*(Q*x*(x'*P*x) - (x'*Q*x+sigma_n*w'*w)*(P*x))/((x'*P*x)^2);
+        % 
+        % daoham = (1-rho)*daoham_sinr + 2*rho*H_tilde'*(H_tilde*x - y) ;%+ 2*(1-rho)*lambda*(x-x_init);
 
 
         x = x - alpha*daoham;
@@ -176,7 +176,7 @@ for nn = 1:N_montecarlo
             tmp = tmp + sigma_k(i)*Ak(:,:,i)'*x*x'*Ak(:,:,i);
         end
         mau = w'*tmp*w + sigma_n*w'*w;
-        cost(it) = rho*norm(H_tilde*x - y, 2)^2 + (1-rho)*mau/tu + (1-rho)*lambda*norm(x - x_init, 2)^2;
+        cost(it) = rho*norm(H_tilde*x - y, 2)^2 + (1-rho)*mau/tu ;%+ (1-rho)*lambda*norm(x - x_init, 2)^2;
     end
     X_opt = reshape(x, [N L]);
     for ii = 1:length(SNRdB)
@@ -215,8 +215,8 @@ figure(2)
 plot(theta*180/pi,10*log10(diag(a'*X_opt*X_opt'*a)/real(trace(X_opt*X_opt'))),'LineWidth',1.5);
 hold on; grid on;
 plot(theta*180/pi,10*log10(diag(a'*X_dir*X_dir'*a)/real(trace(X_dir*X_dir'))),'LineWidth',1.5);
-plot(theta*180/pi,10*log10(diag(a'*X_trdoff2*X_trdoff2'*a)/real(trace(X_trdoff2*X_trdoff2'))),'LineWidth',1.5);
-plot(theta*180/pi,10*log10(diag(a'*X_trdoff4*X_trdoff4'*a)/real(trace(X_trdoff4*X_trdoff4'))),'LineWidth',1.5);
+%plot(theta*180/pi,10*log10(diag(a'*X_trdoff2*X_trdoff2'*a)/real(trace(X_trdoff2*X_trdoff2'))),'LineWidth',1.5);
+%plot(theta*180/pi,10*log10(diag(a'*X_trdoff4*X_trdoff4'*a)/real(trace(X_trdoff4*X_trdoff4'))),'LineWidth',1.5);
 xline(target_DoA*180/pi, 'b-.', 'Linewidth', 1);
 xline(interference_DoA*180/pi, 'k-.', 'Linewidth', 1);
 legend('[9] with multi-target', 'Reference', 'Liu 2018, Dir, Total Power', 'Liu 2018, Dir, Per Ant')
