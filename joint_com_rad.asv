@@ -18,8 +18,8 @@ delta=pi/180;   % Space between elements of antena
 theta=-pi/2:delta:pi/2;
 target_DoA=[-20*pi/180];
 interference_DoA = [-60*pi/180, 40*pi/180];
-sigma_t = [0.5, 0.5]; %W
-sigma_k = [0.4,0.4]; %W
+sigma_t = [0.25, 0.35]; %W
+sigma_k = [0.09,0.25]; %W
 sigma_n = 0; %W
 
 % Tính đến bài toán QoS
@@ -54,13 +54,13 @@ F = chol(R_d)'; % Cholesky decomposition
 %Steering vectors of targets
 for tt=1:T
     for jj=1:length(target_DoA)
-        A_tt(tt,jj)=exp(2j*pi*(tt-1)*sin(target_DoA(jj)));
+        A_tt(tt,jj)=exp(1j*pi*(tt-1))*sin(target_DoA(jj));
     end
 end
 
 for rr=1:R
     for jj=1:length(target_DoA)
-        A_rt(rr,jj)=exp(2j*pi*(rr-1)*sin(target_DoA(jj)));
+        A_rt(rr,jj)=exp(1j*pi*(rr-1))*sin(target_DoA(jj));
     end
 end
 
@@ -72,13 +72,13 @@ end
 %Steering vectors of interferences
 for tt=1:T
     for jj=1:length(interference_DoA)
-        A_tk(tt,jj)=exp(2j*pi*(tt-1)*sin(interference_DoA(jj)));
+        A_tk(tt,jj)=exp(1j*pi*(tt-1))*sin(interference_DoA(jj));
     end
 end
 
 for rr=1:R
     for jj=1:length(interference_DoA)
-        A_rk(rr,jj)=exp(2j*pi*(rr-1)*sin(interference_DoA(jj)));
+        A_rk(rr,jj)=exp(1j*pi*(rr-1))*sin(interference_DoA(jj));
     end
 end
 
@@ -140,7 +140,7 @@ for nn = 1:N_montecarlo
 
         daoham_sinr = 2*(Q*x*x'*P*x - (x'*Q*x+sigma_n*w'*w)*(P*x))/((x'*P*x)^2);
         
-        daoham_x = 2*rho*H_tilde'*(H_tilde*x - s)  + (1-rho)*daoham_sinr +  2*(1-rho)*lambda*(x-x_0);
+        daoham_x = 2*rho*H_tilde'*(H_tilde*x - s) + (1-rho)*daoham_sinr +  2*(1-rho)*lambda*(x-x_0);
         
         % Project Gradient Descent method
         x = x - alpha*daoham_x;
@@ -172,8 +172,8 @@ for nn = 1:N_montecarlo
         for i=1:length(target_DoA)
             power_t = power_t + (sigma_t(i)*abs(w'*A_theta_t(:,:,i)*x))^2;
         end
-         
-        cost(iter) =  rho*norm(H_tilde*x - s, 2)^2 + (1-rho)*power_i/power_t + (1-rho)*lambda*norm(x - x_0, 2)^2;
+         % rho*norm(H_tilde*x - s, 2)^2 +
+        cost(iter) =  (1-rho)*(power_i/length(interference_DoA))/(power_t/(length(target_DoA)));% + (1-rho)*lambda*norm(x - x_0, 2)^2;
     end
     X_opt = reshape(x,[T N]);
 

@@ -86,7 +86,7 @@ F = chol(R)'; % Cholesky decomposition
 % cvx_end
 % R = waveform_design_multibm_covmat(Pd_theta,N,L,a,theta,power); % Solve Eq. 10
 % F = chol(R)'; % Eq. 11
-rho = 0.2; % Trade-off
+rho = 1; % Trade-off
 amp = sqrt(power);
 
 
@@ -107,7 +107,7 @@ for nn = 1:N_montecarlo
     iter = 100;
     cost = zeros(1, iter);
     alpha = 0.05; % descent coefficient
-    x = x_init - 100;
+    x = sqrt(power/(L*N))*ones(L*N,1);
     lambda = 1;
     for it = 1:iter
         %% Update w
@@ -133,31 +133,33 @@ for nn = 1:N_montecarlo
         for i = 1:length(interference_DoA)
             B = B + sigma_k(i)*Ak(:,:,i)'*x*x'*Ak(:,:,i);
         end
+        
         w = (pinv(B)*A*x)/(x'*A'*pinv(B)*A*x);
+
         %% Update x
-        U = 0; V = 0;
-        for i = 1:length(target_DoA)
-            U = U + sigma_u(i)*A0(:,:,i);
-        end
-        for i = 1:length(interference_DoA)
-            V = V + sigma_k(i)*Ak(:,:,i);
-        end
-        term = 1/(w'*U*x*x'*U'*w)^2*(w'*U*x*x'*U'*w*V'*w*w'*x - (w'*V*x*x'*V'*w + sigma_n*w'*w)*U'*w*w'*U*x);
-        daoham = 2*(1-rho)*term + 2*rho*H_tilde'*(H_tilde*x - y) ;%+ 2*(1-rho)*lambda*(x - x_init);
+        % U = 0; V = 0;
+        % for i = 1:length(target_DoA)
+        %     U = U + sigma_u(i)*A0(:,:,i);
+        % end
+        % for i = 1:length(interference_DoA)
+        %     V = V + sigma_k(i)*Ak(:,:,i);
+        % end
+        % term = 1/(w'*U*x*x'*U'*w)^2*(w'*U*x*x'*U'*w*V'*w*w'*x - (w'*V*x*x'*V'*w + sigma_n*w'*w)*U'*w*w'*U*x);
+        % daoham = 2*(1-rho)*term + 2*rho*H_tilde'*(H_tilde*x - y) ;%+ 2*(1-rho)*lambda*(x - x_init);
         %% Update x
-        % Q = 0;
-        % P = 0;
-        % for kk=1:length(interference_DoA)
-        %     Q = Q + sigma_k(kk)*(Ak(:,:,kk)'*w*w'*Ak(:,:,kk));
-        % end
-        % 
-        % for tt=1:length(target_DoA)
-        %     P = P + sigma_u(tt)*(A0(:,:,tt)'*w*w'*A0(:,:,tt));
-        % end
-        % 
-        % daoham_sinr = 2*(Q*x*(x'*P*x) - (x'*Q*x+sigma_n*w'*w)*(P*x))/((x'*P*x)^2);
-        % 
-        % daoham = (1-rho)*daoham_sinr + 2*rho*H_tilde'*(H_tilde*x - y) ;%+ 2*(1-rho)*lambda*(x-x_init);
+        Q = 0;
+        P = 0;
+        for kk=1:length(interference_DoA)
+            Q = Q + sigma_k(kk)*(Ak(:,:,kk)'*w*w'*Ak(:,:,kk));
+        end
+
+        for tt=1:length(target_DoA)
+            P = P + sigma_u(tt)*(A0(:,:,tt)'*w*w'*A0(:,:,tt));
+        end
+
+        daoham_sinr = 2*(Q*x*(x'*P*x) - (x'*Q*x+sigma_n*w'*w)*(P*x))/((x'*P*x)^2);
+
+        daoham = (1-rho)*daoham_sinr ;%+ 2*rho*H_tilde'*(H_tilde*x - y) + 2*(1-rho)*lambda*(x-x_init);
 
 
         x = x - alpha*daoham;
@@ -170,13 +172,23 @@ for nn = 1:N_montecarlo
         %     % end
         % end
 
-        tu = sigma_u(1)*abs(w'*A*x)^2;
-        tmp = 0;
-        for i = 1:length(interference_DoA)
-            tmp = tmp + sigma_k(i)*Ak(:,:,i)'*x*x'*Ak(:,:,i);
+        % tu = sigma_u(1)*abs(w'*A*x)^2;
+        % tmp = 0;
+        % for i = 1:length(interference_DoA)
+        %     tmp = tmp + sigma_k(i)*Ak(:,:,i)'*x*x'*Ak(:,:,i);
+        % end
+        % mau = w'*tmp*w + sigma_n*w'*w;
+        mau = 0;
+        for i=1:length(target_DoA)
+            mau = mau + sigma_u(i)*abs(w'*A0(:,:,i)*x)^2;
         end
-        mau = w'*tmp*w + sigma_n*w'*w;
-        cost(it) = rho*norm(H_tilde*x - y, 2)^2 + (1-rho)*mau/tu ;%+ (1-rho)*lambda*norm(x - x_init, 2)^2;
+
+        tu = 0;
+        for i=1:length(interference_DoA)
+            tu = tu + sigma_k(i)*abs(w'*Ak(:,:,i)*x)^2;
+        end
+        % rho*norm(H_tilde*x - y, 2)^2 + (1-rho)*lambda*norm(x - x_init, 2)^2
+        cost(it) =  (1-rho)*tu/mau;
     end
     X_opt = reshape(x, [N L]);
     for ii = 1:length(SNRdB)

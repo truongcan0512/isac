@@ -42,7 +42,7 @@ end
 R = waveform_design_multibm_covmat( Pd_theta,N,L,a,theta,power); % Desired Hermitian positive semidefinite covariance matrix
 %R = waveform_mainbm_covmat( N,L,a,theta_target,theta,power );
 F = chol(R)'; % Equation (11)
-rho = 0.2;
+rho = 1;
 %rou1 = 0.8;
 amp = sqrt(power);
 for nn = 1:N_montecarlo
