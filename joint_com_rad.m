@@ -12,15 +12,15 @@ N_montecarlo = 1;
 SNRdB = -2:2:12;
 rho = 0.2;
 lambda = 1; % penalty parameter (IMPORTANT in similarity constraint !!!)
-alpha = 0.05; % Descent rate
+alpha = 0.01; % Descent rate
 amp = sqrt(P_max);
 delta=pi/180;   % Space between elements of antena 
 theta=-pi/2:delta:pi/2;
-target_DoA=[-20*pi/180];
-interference_DoA = [-60*pi/180, 40*pi/180];
-sigma_t = [0.5, 0.5]; %W
-sigma_k = [0.4,0.4]; %W
-sigma_n = 0; %W
+target_DoA=[-20*pi/180,20*pi/180];
+interference_DoA = [-60*pi/180,40*pi/180];
+sigma_t = [0.1, 0.2]; %W
+sigma_k = [1,1]; %W
+sigma_n = 0.001; %W
 
 % Tính đến bài toán QoS
 % -- Design desired beam pattern -- %
@@ -28,7 +28,14 @@ sigma_n = 0; %W
 
 for tt=1:T
     for jj=1:length(theta)
-        a(tt,jj)=exp(1j*pi*(tt-T/2)*sin(theta(jj)));
+        a(tt,jj)=exp(-1j*pi*(tt-1)*sin(theta(jj)));
+    end
+end
+
+
+for tt=1:R
+    for jj=1:length(theta)
+        a_r(tt,jj)=exp(-1j*pi*(tt-1)*sin(theta(jj)));
     end
 end
 
@@ -54,13 +61,13 @@ F = chol(R_d)'; % Cholesky decomposition
 %Steering vectors of targets
 for tt=1:T
     for jj=1:length(target_DoA)
-        A_tt(tt,jj)=exp(2j*pi*(tt-1)*sin(target_DoA(jj)));
+        A_tt(tt,jj)=exp(-1j*pi*(tt-1)*sin(target_DoA(jj)));
     end
 end
 
 for rr=1:R
     for jj=1:length(target_DoA)
-        A_rt(rr,jj)=exp(2j*pi*(rr-1)*sin(target_DoA(jj)));
+        A_rt(rr,jj)=exp(-1j*pi*(rr-1)*sin(target_DoA(jj)));
     end
 end
 
@@ -72,19 +79,27 @@ end
 %Steering vectors of interferences
 for tt=1:T
     for jj=1:length(interference_DoA)
-        A_tk(tt,jj)=exp(2j*pi*(tt-1)*sin(interference_DoA(jj)));
+        A_tk(tt,jj)=exp(-1j*pi*(tt-1)*sin(interference_DoA(jj)));
     end
 end
 
 for rr=1:R
     for jj=1:length(interference_DoA)
-        A_rk(rr,jj)=exp(2j*pi*(rr-1)*sin(interference_DoA(jj)));
+        A_rk(rr,jj)=exp(-1j*pi*(rr-1)*sin(interference_DoA(jj)));
     end
 end
 
 for kk=1:length(interference_DoA)
     A_theta_k(:,:,kk) = kron(eye(N),A_rk(:,kk)*A_tk(:,kk)');
 end
+
+
+%----------%
+for i=1:length(a)
+    A_theta(:,:,i) = kron(eye(N),a_r(:,i)*a(:,i)');
+end
+%----------%
+
 
 
 for nn = 1:N_montecarlo
@@ -111,7 +126,7 @@ for nn = 1:N_montecarlo
 
     %x = sqrt(P_max/(N*T))*ones(T*N,1); % TE domain
     x = sqrt(P_max)*ones(T*N,1); % CM domain
-    max_iter = 100;
+    max_iter = 200;
     cost = zeros(1, max_iter);
     for iter=1:max_iter
         %% Update w
@@ -211,6 +226,15 @@ for nn = 1:N_montecarlo
     disp(['Progress - ',num2str((nn-1)*length(SNRdB)+ii),'/',num2str(length(SNRdB)*N_montecarlo)]);
 end
 
+
+P_d = 0;
+for i=1:length(a)
+    P_d(i) = abs(w'*A_theta(:,:,i)*x)^2;
+end
+
+
+
+
 %%
 figure(1);
 % plot(SNRdB,mean(sumrate_orth,2),'x-','LineWidth',1.5,'MarkerSize',8);hold on;
@@ -243,14 +267,16 @@ figure(2);
 plot(theta*180/pi,10*log10(diag(a'*X_dir*X_dir'*a)/real(trace(X_dir*X_dir'))),'LineWidth',1.5);hold on;
 %plot(theta*180/pi,10*log10(diag(a'*X_trdoff4*X_trdoff4'*a)/real(trace(X_trdoff4*X_trdoff4'))),'LineWidth',1.5);hold on;
 plot(theta*180/pi,10*log10(diag(a'*X_opt*X_opt'*a)/real(trace(X_opt*X_opt'))),'LineWidth',1.5);hold on;
+%plot(theta*180/pi,10*log10(diag(a_r'*X_receive*X_receive'*a_r)/real(trace(X_receive*X_receive'))),'LineWidth',1.5);hold on;
+plot(theta*180/pi,10*log10(P_d),'LineWidth',1.5);hold on;
 
-%plot(theta*180/pi,P_d,'LineWidth',1.5);hold on;
+
 xlim([-90,90]);
 xline(target_DoA*180/pi, 'b-.','Linewidth', 1);
 xline(interference_DoA*180/pi, 'k-.', 'Linewidth', 1);
 xlabel('\theta(deg)');
 ylabel('Beampattern');
-legend('reference waveform','paper');
+legend('reference waveform','transmit','receive');
 
 
 figure(3);

@@ -4,7 +4,7 @@ close all;
 warning off;
 T = 16; % transmit antenas
 R = 8; % receive antenas
-M = 2; % users
+M = 4; % users
 %K = 3;  % interference sources
 N = 20; % number of symbols
 P_max = 1; %power Watt
@@ -122,9 +122,7 @@ end
 
 
 
-%% Plot
-
-% sum rate
+%%
 figure(1);
 plot(SNRdB,mean(sumrate_TE,2),'x-','LineWidth',1.5,'MarkerSize',8); hold on;
 plot(SNRdB,mean(sumrate_TE_SIM,2),'o-','LineWidth',1.5,'MarkerSize',8); hold on;
@@ -137,25 +135,31 @@ xlabel('Transmit SNR (dB)');
 ylabel('Average Achievable Sum Rate (bps/Hz)');
 legend('TE','TE+SIM','CM','CM+SIM','Zero MUI');
 
-% Beampattern
 figure(2);
-%plot(theta*180/pi,10*log10(diag(a'*X_dir*X_dir'*a)/real(trace(X_dir*X_dir'))),'LineWidth',1.5);hold on;
-%plot(theta*180/pi,10*log10(diag(a'*X_opt_TE*X_opt_TE'*a)/real(trace(X_opt_TE*X_opt_TE'))),'LineWidth',1.5);hold on;
+% plot(theta*180/pi,10*log10(diag(a_t'*X_opt*X_opt'*a_t)/real(trace(X_opt*X_opt'))),'LineWidth',1.5);hold on;
+% plot(theta*180/pi,10*log10(diag(a'*X_omni*X_omni'*a)/real(trace(X_omni*X_omni'))),'LineWidth',1.5);hold on;
+% plot(theta*180/pi,10*log10(diag(a'*X_dir*X_dir'*a)/real(trace(X_dir*X_dir'))),'LineWidth',1.5);hold on;
+% plot(theta*180/pi,10*log10(diag(a'*X_trdoff1*X_trdoff1'*a)/real(trace(X_trdoff1*X_trdoff1'))),'LineWidth',1.5);hold on;
+% plot(theta*180/pi,10*log10(diag(a'*X_trdoff2*X_trdoff2'*a)/real(trace(X_trdoff2*X_trdoff2'))),'LineWidth',1.5);hold on;
+% plot(theta*180/pi,10*log10(diag(a'*X_trdoff3*X_trdoff3'*a)/real(trace(X_trdoff3*X_trdoff3'))),'LineWidth',1.5);hold on;
+% plot(theta*180/pi,10*log10(diag(a'*X_trdoff4*X_trdoff4'*a)/real(trace(X_trdoff4*X_trdoff4'))),'LineWidth',1.5);grid on;
+% xlim([-90,90]);
+% xlabel('\theta(deg)');
+% ylabel('Beampattern');
+%legend('Omni-Strict','Directional-Strict','Omni-Tradeoff-Total,\rho = 0.2','Directional-Tradeoff-Total,\rho = 0.2','Omni-Tradeoff-perAnt,\rho = 0.2','Directional-Tradeoff-perAnt,\rho = 0.2');
+plot(theta*180/pi,10*log10(diag(a'*X_dir*X_dir'*a)/real(trace(X_dir*X_dir'))),'LineWidth',1.5);hold on;
+plot(theta*180/pi,10*log10(diag(a'*X_opt_TE*X_opt_TE'*a)/real(trace(X_opt_TE*X_opt_TE'))),'LineWidth',1.5);hold on;
 %plot(theta*180/pi,10*log10(diag(a_r'*X_receive*X_receive'*a_r)/real(trace(X_receive*X_receive'))),'LineWidth',1.5);hold on;
 plot(theta*180/pi,10*log10(P_d_TE),'LineWidth',1.5);hold on;
-plot(theta*180/pi,10*log10(P_d_TE_SIM),'LineWidth',1.5);hold on;
-plot(theta*180/pi,10*log10(P_d_CM),'LineWidth',1.5);hold on;
-plot(theta*180/pi,10*log10(P_d_CM_SIM),'LineWidth',1.5);hold on;
 
 xlim([-90,90]);
 xline(target_DoA*180/pi, 'b-.','Linewidth', 1);
 xline(interference_DoA*180/pi, 'k-.', 'Linewidth', 1);
 xlabel('\theta(deg)');
 ylabel('Beampattern');
-% legend('reference waveform','transmit','receive');
-legend('TE','TE+SIM','CM','CM+SIM');
+legend('reference waveform','transmit','receive');
 
-% Cost function
+
 figure(3);
 plot(abs(cost_TE));hold on;
 plot(abs(cost_TE_SIM));hold on;
